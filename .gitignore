@@ -1,0 +1,21 @@
+# Python 缓存
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Bazel 构建产物
+/bazel-*
+**/bazel-*
+bazel-bin/
+bazel-out/
+bazel-testlogs/
+
+# 生成产物（由 test_c_code_generate.py 运行时产生）
+c_generated_code/
+
+# IDE / 系统
+.vscode/
+.idea/
+*.swp
+.DS_Store
