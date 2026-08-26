@@ -113,36 +113,27 @@ Eigen::SparseMatrix<double> dynamic_jacobian_x(
 
 `save_code_to_file` 还会自动创建/追加 Bazel `BUILD`（`cc_library` + `@eigen` 依赖），生成的目录可直接被 Bazel 工程引用。
 
-## 与 iLQR 求解器（VincentWong3/ilqr）的衔接
+## 与外部求解器的衔接（如 iLQR）
+
+本仓库是**独立通用工具**，保持纯粹：只负责「符号推导 → 生成 C++ 代码」，不为任何特定求解器做专属改动。
 
 ### 现状差异：Dense vs Sparse
 
-| | ilqr 求解器（cpp/model/new_bicycle_node.h） | 本工具生成 |
+| | 典型求解器（如 ilqr 的 cpp/model/new_bicycle_node.h） | 本工具生成 |
 |---|---|---|
 | 矩阵类型 | 编译期定维 **Dense**：`Eigen::Matrix<double, 6, 6>` | 运行时定维 **Sparse**：`Eigen::SparseMatrix<double>` |
 | 返回形式 | `std::pair<MatrixA, MatrixB>` / `std::tuple<...>` | 单个函数返回稀疏矩阵 |
-| 调用方式 | `dynamics_jacobian(x, u)` 成员函数 | 自由函数 |
+| 调用方式 | 节点成员函数 | 自由函数 |
 
-### 衔接方案（三选一）
+### 衔接原则：适配在消费方完成
 
-**方案 A：生成器增加 Dense 输出模式（推荐）**
-给 `generate_function_code` 加一个 `dense=True/False` 参数，输出 `Eigen::Matrix<double, rows, cols>`（编译期定维）。
-- 生成结果与 ilqr 的 `MatrixA`/`MatrixB` 类型**完全匹配**，即插即用
-- 改动集中在生成器（约 20 行），ilqr 侧零改动或仅改调用名
+生成代码是稀疏矩阵，若消费方（如 ilqr）的接口是编译期定维 Dense，**由消费方自行适配**，不改本工具。常见做法：
 
-**方案 B：ilqr 侧加适配层**
-在 ilqr 节点里调用生成函数后 `.toDense()` 转换（`Eigen::SparseMatrix` 自带 `toDense()`）。
-- 不动生成器，但每次调用有稀疏→稠密转换开销（对 6×6 矩阵可忽略）
-- 需要包一层成员函数适配接口
+- **包装层转换**：在消费方包一层，调用生成函数后 `.toDense()`（`Eigen::SparseMatrix` 自带），再转成自己的 Dense 类型
+- **直接采用稀疏**：若消费方能接受稀疏矩阵运算，生成代码即可直接使用
+- **测试比对**：生成的稀疏矩阵可作为数值基准，与消费方手写实现对照验证正确性
 
-**方案 C：保持现状，仅作参考实现**
-生成代码作为"标准答案"用于**测试比对**（数值对照），不替换手写实现。
-- 零风险，但失去自动化的意义
-
-> 推荐先做 **方案 A**：稀疏矩阵本质是运行时维度（模板参数是存储序/索引类型，不是行列数），
-> 与 ilqr 的编译期 Dense 天然不匹配；让生成器输出 Dense 才是最顺的接法。
-> 接好后 ilqr 的 `tools/` 推导脚本可逐步被本工具取代，形成
-> 「改模型 → 符号推导 → 自动生成 C++ → 编译测试」闭环。
+> 本仓库不提供、也不计划提供 Dense 输出模式或 ilqr 专属适配——这些属于消费方职责。
 
 ## 依赖版本
 
